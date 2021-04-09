@@ -63,7 +63,25 @@ def entropy(y):
     """
     # INSERT YOUR CODE HERE
     # raise Exception('Function not yet implemented!')
-    (unique_vals, counts) = np.unique(y, return_counts=True)
+
+    # weighted_attributes = {0: 0, 1: 0}
+    # for i in range(len(y)):
+    #     if(y[i]==0):
+    #         weighted_attributes[0] += weight[i]
+    #     else:
+    #         weighted_attributes[1] += weight[i]
+    # total_sum=weighted_attributes[0]+weighted_attributes[1]
+    # ent=[]
+    # for i in range(len(weighted_attributes)):
+    #     prob= weighted_attributes[i]/total_sum
+
+    #     if prob != 0:
+    #         logs=-np.log2(prob)
+    #         ent.append(prob*logs)
+
+    # return sum(ent)
+
+    (_, counts) = np.unique(y, return_counts=True)
     total_vals = sum(counts)
     probs = counts/total_vals
     logs = -np.log2(probs)
@@ -72,7 +90,7 @@ def entropy(y):
 
 
 
-def mutual_information(x, y):
+def mutual_information(x, y,weight):
     """
     Compute the mutual information between a data column (x) and the labels (y). The data column is a single attribute
     over all the examples (n x 1). Mutual information is the difference between the entropy BEFORE the split set, and
@@ -83,6 +101,9 @@ def mutual_information(x, y):
     # INSERT YOUR CODE HERE
     # raise Exception('Function not yet implemented!')
     entY = entropy(y)
+
+    # for binary split consider zeroes and ones
+    
     hashmap = {}
     for i in np.unique(x):
         hashmap[i] = dict(Counter(np.array(y[np.where(x==i)]).flatten()))
@@ -190,6 +211,100 @@ def id3(x, y, attribute_value_pairs=None, depth=0, max_depth=5):
     
 
 
+def bagging(x, y, max_depth, num_trees):
+    """Input: x = Feature set, y = Labels, max depth=maximum depth of tree (more for bagging), num_trees = no. of bags
+    Returns predictions set of different trees
+    """
+
+    predictions = {}
+    alpha = 1
+
+    length_of_data_set = len(x)
+    # weights=np.ones(length_of_data_set)
+
+    # loop through with number of bags and call id3 recursively to get the predicted tree
+    for i in range(num_trees):
+        # generate random indices of sample(bootstrap) with replacement
+        bootstrap_indices = np.random.choice(length_of_data_set, size=length_of_data_set, replace=True)
+
+        # apply id3 to get the prediction
+        predicted_tree = id3(x[bootstrap_indices], y[bootstrap_indices], max_depth=max_depth)
+
+        predictions[i] = (alpha, predicted_tree)
+
+    return predictions
+
+
+def boosting(x, y, max_depth, num_stumps):
+    """Input: x = Feature set, y = Labels, max_depth = maximum depth of tree = 1, 2 (stumps/weak learner), num_trees = no. of bags
+    Return predictions set of different trees
+    """
+
+    # length of training set
+    length_of_data_set = len(x)
+
+    # calculate weights of every example -> equal for first time
+    weights = np.ones(length_of_data_set)/length_of_data_set
+    predictions={}
+    # initialize alpha values to 1
+    alpha=1
+
+    for i in range(num_stumps):
+        # generate random sample after applying weights
+        bootstrap_indices = np.random.choice(length_of_data_set, size=length_of_data_set, replace=True, p=weights)
+        
+        # get predicted tree
+        predicted_tree=id3(x[bootstrap_indices],y[bootstrap_indices],max_depth=max_depth)
+        
+        # initialize the error and predicted labels array
+        error = 0
+        y_pred = []
+
+        # calculate the error of every prediction and add only misclassifications
+        for j in range(length_of_data_set):
+            y_pred.append(predict_example(x[j, :], predicted_tree))
+            if y_pred[j] != y[j]:
+                error += weights[j]
+
+        # calculate new alpha value
+        alpha = 0.5 * (np.log(1-error) - np.log(error))
+
+        # update the weights according to misclassifications -> exp(-alpha) for correct and vice versa
+        for j in range(length_of_data_set):
+            if y_pred[j] != y[j]:
+                weights[j] = weights[j]*np.exp(alpha)
+            else:
+                weights[j] = weights[j]*np.exp(-alpha)
+
+
+        # Normalize weights so that they add up to 1
+        weights = weights/weights.sum()
+
+        # add this prediction to final result
+        predictions[i] = (alpha, predicted_tree)
+
+    return predictions
+
+def predict_boost_bag_example(x, h_ens):
+    """Input: x = example for prediction, h_ens = dictionary of alpha and predicted trees
+    """
+
+    # initialize the avg of predictions to 0
+    avg = 0
+
+    for _, value in h_ens.items():
+        # predict the example
+        y_predicted=predict_example(x,value[1])
+
+        # add product of alpha and predicted value
+        avg += value[0]*y_predicted
+
+    return 1 if avg > 0.5 else 0
+
+
+
+
+
 def predict_example(x, tree):
     """
     Predicts the classification label for a single example x using tree by recursively descending the tree until
@@ -256,68 +371,79 @@ def visualize(tree, depth=0):
 
 if __name__ == '__main__':
     # Load the training data
-    M = np.genfromtxt('./monks-1.train', missing_values=0, skip_header=0, delimiter=',', dtype=int)
+    M = np.genfromtxt('./data/mushroom.train', missing_values=0, skip_header=0, delimiter=',', dtype=int)
     ytrn = M[:, 0]
     Xtrn = M[:, 1:]
 
     # Load the test data
-    M = np.genfromtxt('./monks-1.test', missing_values=0, skip_header=0, delimiter=',', dtype=int)
+    M = np.genfromtxt('./data/mushroom.test', missing_values=0, skip_header=0, delimiter=',', dtype=int)
     ytst = M[:, 0]
     Xtst = M[:, 1:]
 
-    # Learn a decision tree of depth 3
-    decision_tree = id3(Xtrn, ytrn, max_depth=2)
-    visualize(decision_tree)
 
-    # Compute the test error
-    y_pred = [predict_example(x, decision_tree) for x in Xtst]
-    tst_err = compute_error(ytst, y_pred)
+    pred = boosting(Xtrn,ytrn,1,10)
+    for i, value in pred.items():
+        # visualize(value[1])
+        y_pred = [predict_boost_bag_example(x, pred) for x in Xtst]
+        tst_err = compute_error(ytst, y_pred)
+        print(tst_err*100)
 
-    print('Test Error = {0:4.2f}%.'.format(tst_err * 100))
 
-    train_error = compute_error(ytrn, y_pred)
 
-    print('Train Error = {0:4.2f}%.'.format(train_error * 100))
+
+    # # Learn a decision tree of depth 3
+    # decision_tree = id3(Xtrn, ytrn, max_depth=1)
+    # visualize(decision_tree)
+
+    # # Compute the test error
+    # y_pred = [predict_example(x, decision_tree) for x in Xtst]
+    # tst_err = compute_error(ytst, y_pred)
+
+    # print('Test Error = {0:4.2f}%.'.format(tst_err * 100))
+
+    # train_error = compute_error(ytrn, y_pred)
+
+    # print('Train Error = {0:4.2f}%.'.format(train_error * 100))
 
     # Draw Confusion Matrix with scikit
-    print()
-    print("Confusion Matrix")
-    print(confusion_matrix(ytst, y_pred))
+    # print()
+    # print("Confusion Matrix")
+    # print(confusion_matrix(ytst, y_pred))
 
 
     # Calculating average of training errors and testing errors - MONKS 1 Problem
-    for i in range(1, 4):
-        filename_train = str('./monks-'+str(i)+'.train')
-        M = np.genfromtxt(filename_train, missing_values=0, skip_header=0, delimiter=',', dtype=int)
-        ytrn = M[:, 0]
-        Xtrn = M[:, 1:]
+    # for i in range(1, 4):
+    #     filename_train = str('./monks-'+str(i)+'.train')
+    #     M = np.genfromtxt(filename_train, missing_values=0, skip_header=0, delimiter=',', dtype=int)
+    #     ytrn = M[:, 0]
+    #     Xtrn = M[:, 1:]
 
 
-        filename_test = str('./monks-'+str(i)+'.test')
-        M = np.genfromtxt(filename_test, missing_values=0, skip_header=0, delimiter=',', dtype=int)
-        ytst = M[:, 0]
-        Xtst = M[:, 1:]
-        monks_test_error = []
-        monks_train_error = []
-        decision_tree_depths = []
-        for j in range(1, 11):
-            decision_tree = id3(Xtrn, ytrn, max_depth=j)
-            y_pred_test = [predict_example(x, decision_tree) for x in Xtst]
-            tst_err = compute_error(ytst, y_pred_test)
+    #     filename_test = str('./monks-'+str(i)+'.test')
+    #     M = np.genfromtxt(filename_test, missing_values=0, skip_header=0, delimiter=',', dtype=int)
+    #     ytst = M[:, 0]
+    #     Xtst = M[:, 1:]
+    #     monks_test_error = []
+    #     monks_train_error = []
+    #     decision_tree_depths = []
+    #     for j in range(1, 11):
+    #         decision_tree = id3(Xtrn, ytrn, max_depth=j)
+    #         y_pred_test = [predict_example(x, decision_tree) for x in Xtst]
+    #         tst_err = compute_error(ytst, y_pred_test)
 
-            y_pred_train = [predict_example(x, decision_tree) for x in Xtrn]
-            train_error = compute_error(ytrn, y_pred_train)
-            monks_test_error.append(tst_err)
-            monks_train_error.append(train_error)
-            decision_tree_depths.append(j)
+    #         y_pred_train = [predict_example(x, decision_tree) for x in Xtrn]
+    #         train_error = compute_error(ytrn, y_pred_train)
+    #         monks_test_error.append(tst_err)
+    #         monks_train_error.append(train_error)
+    #         decision_tree_depths.append(j)
 
-        fig,ax=plt.subplots()
-        plt.xlabel('Decision Tree Depth')
-        plt.ylabel('Errors')
-        plt.plot(decision_tree_depths,monks_train_error,'g',label='Training Error')
-        plt.plot(decision_tree_depths, monks_test_error,'p',label='Test Error', linestyle='dashed')
-        legend = ax.legend(loc='upper right', shadow=True, fontsize='x-large')
-        plt.savefig('monks__'+ str(i)+ '.png')
-        plt.show()
-        print(train_error)
+        # fig,ax=plt.subplots()
+        # plt.xlabel('Decision Tree Depth')
+        # plt.ylabel('Errors')
+        # plt.plot(decision_tree_depths,monks_train_error,'g',label='Training Error')
+        # plt.plot(decision_tree_depths, monks_test_error,'p',label='Test Error', linestyle='dashed')
+        # legend = ax.legend(loc='upper right', shadow=True, fontsize='x-large')
+        # plt.savefig('monks__'+ str(i)+ '.png')
+        # plt.show()
+        # print(train_error)
     
