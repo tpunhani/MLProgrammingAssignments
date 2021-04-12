@@ -31,7 +31,7 @@ from collections import Counter
 from sklearn.metrics import classification_report, confusion_matrix
 # Matplotlib is used only for graph plotting
 import matplotlib.pyplot as plt
-
+from collections import defaultdict
 
 
 def partition(x):
@@ -55,7 +55,7 @@ def partition(x):
     
 
 
-def entropy(y):
+def entropy(y, weight):
     """
     Compute the entropy of a vector y by considering the counts of the unique values (v1, ... vk), in z
 
@@ -64,33 +64,30 @@ def entropy(y):
     # INSERT YOUR CODE HERE
     # raise Exception('Function not yet implemented!')
 
-    # weighted_attributes = {0: 0, 1: 0}
-    # for i in range(len(y)):
-    #     if(y[i]==0):
-    #         weighted_attributes[0] += weight[i]
-    #     else:
-    #         weighted_attributes[1] += weight[i]
-    # total_sum=weighted_attributes[0]+weighted_attributes[1]
-    # ent=[]
-    # for i in range(len(weighted_attributes)):
-    #     prob= weighted_attributes[i]/total_sum
 
-    #     if prob != 0:
-    #         logs=-np.log2(prob)
-    #         ent.append(prob*logs)
+    # for binary splits consider only 0 and 1 case
+    weighted_attributes = {0: 0, 1: 0}
+    for i in range(len(y)):
+        if(y[i]==0):
+            weighted_attributes[0] += weight[i]
+        else:
+            weighted_attributes[1] += weight[i]
+    total_sum=weighted_attributes[0]+weighted_attributes[1]
+    ent=[]
+    for i in range(len(weighted_attributes)):
+        prob = 0
+        if total_sum != 0:
+            prob= weighted_attributes[i]/total_sum
 
-    # return sum(ent)
+        if prob != 0:
+            logs=-np.log2(prob)
+            ent.append(prob*logs)
 
-    (_, counts) = np.unique(y, return_counts=True)
-    total_vals = sum(counts)
-    probs = counts/total_vals
-    logs = -np.log2(probs)
-    ents = probs*logs
-    return sum(ents)
+    return sum(ent)
 
 
 
-def mutual_information(x, y,weight):
+def mutual_information(x, y, weight):
     """
     Compute the mutual information between a data column (x) and the labels (y). The data column is a single attribute
     over all the examples (n x 1). Mutual information is the difference between the entropy BEFORE the split set, and
@@ -100,34 +97,24 @@ def mutual_information(x, y,weight):
     """
     # INSERT YOUR CODE HERE
     # raise Exception('Function not yet implemented!')
-    entY = entropy(y)
+    entY = entropy(y, weight)
 
-    # for binary split consider zeroes and ones
+
+    unique_values_x, counts = np.unique(x, return_counts=True)
+
+    probabilities_x = counts/len(x)
+
+    mapping_of_probabilities = zip(probabilities_x,unique_values_x)
     
-    hashmap = {}
-    for i in np.unique(x):
-        hashmap[i] = dict(Counter(np.array(y[np.where(x==i)]).flatten()))
-
-    total_ent = 0   
-    for j in hashmap:
-        total_ent += entropy_calculation_from_dictionary(hashmap[j], len(y))
-
-    return entY - total_ent
-
-
-def entropy_calculation_from_dictionary(my_dict, total_labels):
-    total_sum = sum(my_dict.values())
-    res = 0
-    for i in my_dict:
-        frac = (my_dict[i]/total_sum)
-        res -= frac * np.log2(frac)
-
-    res = (total_sum/total_labels)*res
-    return res
+    #weighted-average entropy of each possible split
+    for prob, unique_value in mapping_of_probabilities:
+        entY-=prob*entropy(y[x==unique_value], weight) 
+        
+    return entY
 
 
 
-def id3(x, y, attribute_value_pairs=None, depth=0, max_depth=5):
+def id3(x, y, weight, attribute_value_pairs=None, depth=0, max_depth=5):
     """
     Implements the classical ID3 algorithm given training data (x), training labels (y) and an array of
     attribute-value pairs to consider. This is a recursive algorithm that depends on three termination conditions
@@ -186,15 +173,19 @@ def id3(x, y, attribute_value_pairs=None, depth=0, max_depth=5):
         return unique_labels[np.argmax(count_unique_labels)]
 
     entropy_info = []
+    mutual_information_list = []
 
     for feature_column, value in attribute_value_pairs:
         indices = np.where(x[:, feature_column] == value)[0] 
         y_for_feature_single_attribute = y[indices] 
-        entropy_info_for_feature_single_attribute = entropy(y_for_feature_single_attribute)
+        entropy_info_for_feature_single_attribute = entropy(y_for_feature_single_attribute, weight)
         entropy_info.append(entropy_info_for_feature_single_attribute)
+        mutual_information_list.append(mutual_information(x[:, feature_column], y, weight))
 
-    entropy_info_array = np.array(entropy_info)
-    (max_attribute, max_value) = attribute_value_pairs[np.argmin(entropy_info_array)]
+    # convert it into np array to find the argmax
+    mutual_info_array = np.array(mutual_information_list, dtype=float)
+    
+    (max_attribute, max_value) = attribute_value_pairs[np.argmax(mutual_info_array)]
     max_attribute_partition = partition(np.array(x[:, max_attribute] == max_value).astype(int))
     attribute_value_pairs = np.delete(attribute_value_pairs, np.argwhere(np.all(attribute_value_pairs == (max_attribute, max_value), axis=1)),0)
 
@@ -205,14 +196,14 @@ def id3(x, y, attribute_value_pairs=None, depth=0, max_depth=5):
         y_new = y[indices]
         attribute_decision = bool(decision_value)
 
-        decision_tree[(max_attribute, max_value, attribute_decision)] = id3(x_new, y_new, attribute_value_pairs=attribute_value_pairs, max_depth=max_depth, depth=depth+1)
+        decision_tree[(max_attribute, max_value, attribute_decision)] = id3(x_new, y_new, weight, attribute_value_pairs=attribute_value_pairs, max_depth=max_depth, depth=depth+1)
 
     return decision_tree
     
 
 
 def bagging(x, y, max_depth, num_trees):
-    """Input: x = Feature set, y = Labels, max depth=maximum depth of tree (more for bagging), num_trees = no. of bags
+    """Input: x = Feature set, y = Labels, max depth=maximum depth of tree (more for bagging), num_trees = no. of models, bag_size = no. of bags
     Returns predictions set of different trees
     """
 
@@ -220,7 +211,8 @@ def bagging(x, y, max_depth, num_trees):
     alpha = 1
 
     length_of_data_set = len(x)
-    # weights=np.ones(length_of_data_set)
+
+    weight = np.ones(length_of_data_set)
 
     # loop through with number of bags and call id3 recursively to get the predicted tree
     for i in range(num_trees):
@@ -228,7 +220,7 @@ def bagging(x, y, max_depth, num_trees):
         bootstrap_indices = np.random.choice(length_of_data_set, size=length_of_data_set, replace=True)
 
         # apply id3 to get the prediction
-        predicted_tree = id3(x[bootstrap_indices], y[bootstrap_indices], max_depth=max_depth)
+        predicted_tree = id3(x[bootstrap_indices], y[bootstrap_indices], weight, max_depth=max_depth)
 
         predictions[i] = (alpha, predicted_tree)
 
@@ -245,29 +237,39 @@ def boosting(x, y, max_depth, num_stumps):
 
     # calculate weights of every example -> equal for first time
     weights = np.ones(length_of_data_set)/length_of_data_set
+    # print(weights)
     predictions={}
     # initialize alpha values to 1
     alpha=1
 
     for i in range(num_stumps):
         # generate random sample after applying weights
-        bootstrap_indices = np.random.choice(length_of_data_set, size=length_of_data_set, replace=True, p=weights)
+        bootstrap_indices = np.random.choice(length_of_data_set, size=length_of_data_set, replace=True)
         
-        # get predicted tree
-        predicted_tree=id3(x[bootstrap_indices],y[bootstrap_indices],max_depth=max_depth)
+        # get predicted tree with new weights
+        predicted_tree=id3(x[bootstrap_indices],y[bootstrap_indices], weights, max_depth=max_depth)
         
-        # initialize the error and predicted labels array
-        error = 0
+        
+        # define the predicted values array
         y_pred = []
+        
+        # initialize no. of misclaffications
+        mis_count = 0
 
         # calculate the error of every prediction and add only misclassifications
         for j in range(length_of_data_set):
             y_pred.append(predict_example(x[j, :], predicted_tree))
             if y_pred[j] != y[j]:
-                error += weights[j]
+                mis_count += 1
 
+
+        # calculate the avg error
+        error = mis_count/length_of_data_set
+
+        
         # calculate new alpha value
-        alpha = 0.5 * (np.log(1-error) - np.log(error))
+        alpha = 0.5 * (np.log((1-error)/error))
+
 
         # update the weights according to misclassifications -> exp(-alpha) for correct and vice versa
         for j in range(length_of_data_set):
@@ -289,19 +291,25 @@ def predict_boost_bag_example(x, h_ens):
     """Input: x = example for prediction, h_ens = dictionary of alpha and predicted trees
     """
 
-    # initialize the avg of predictions to 0
-    avg = 0
+    # initialize the avg of predictions to 0, it will used for majoirity voting
+    average_alpha = []
 
-    for _, value in h_ens.items():
+    # initialize the sum_alpha which will be used to calculate the avg of alphas
+    sum_alpha = 0
+
+    for _, model in h_ens.items():
+        # model[0] = alpha, model[1] = hypothesis
+
         # predict the example
-        y_predicted=predict_example(x,value[1])
+        y_predicted=predict_example(x,model[1])
 
-        # add product of alpha and predicted value
-        avg += value[0]*y_predicted
+        average_alpha.append(y_predicted*model[0])
+        sum_alpha += model[0]
 
-    return 1 if avg > 0.5 else 0
+    predicted_example = np.sum(average_alpha)/sum_alpha
 
 
+    return predicted_example >= 0.5
 
 
 
@@ -341,7 +349,9 @@ def compute_error(y_true, y_pred):
     for x in range(n):
         if(y_true[x]!=y_pred[x]):
             sum= sum+1
-    err=sum/n
+
+    err = sum/n
+
     return err
 
 
@@ -378,72 +388,135 @@ if __name__ == '__main__':
     # Load the test data
     M = np.genfromtxt('./data/mushroom.test', missing_values=0, skip_header=0, delimiter=',', dtype=int)
     ytst = M[:, 0]
-    Xtst = M[:, 1:]
+    Xtst = M[:, 1:]    
 
 
-    pred = boosting(Xtrn,ytrn,1,10)
-    for i, value in pred.items():
-        # visualize(value[1])
-        y_pred = [predict_boost_bag_example(x, pred) for x in Xtst]
-        tst_err = compute_error(ytst, y_pred)
-        print(tst_err*100)
+    # --------------------BAGGING--------------------
+    print('============================Bagging============================')
+   	# depth 
+    max_depth = [3, 5]
+    # bag size 
+    num_trees = [10, 20]
+
+
+    # create 4 modals and draw the confusion matrix
+    # for m_depth in max_depth:
+    #     for n_tree in num_trees:
+    #         # calculate the weighted hypothesis of bagging
+    #         h_bagging = bagging(Xtrn, ytrn, m_depth, n_tree)
+    #         # calculate training prediction
+    #         train_prediction = [predict_boost_bag_example(Xtrn[i, :], h_bagging) for i in range(len(ytrn))]
+
+    #         # compute the training error
+    #         training_error = compute_error(ytrn, train_prediction)
+
+
+    #         # calculate test predictions
+    #         test_prediction = [predict_boost_bag_example(Xtst[i, :], h_bagging) for i in range(len(ytst))]
+
+    #         # compute the test error
+    #         testing_error = compute_error(ytst, test_prediction)
+
+    #         # print the results
+    #         print("Bagging results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
+    #         print('Training Accuracy={0}, Testing Accuracy={1}'.format((1-training_error)*100, (1-testing_error)*100))
+
+    #         # Print the confusion matrix
+    #         print()
+    #         print("Confusion Matrix for Bagging with max_depth = {} and bag_size={}".format(m_depth, n_tree))
+    #         print(confusion_matrix(ytst, test_prediction))
 
 
 
 
-    # # Learn a decision tree of depth 3
-    # decision_tree = id3(Xtrn, ytrn, max_depth=1)
-    # visualize(decision_tree)
-
-    # # Compute the test error
-    # y_pred = [predict_example(x, decision_tree) for x in Xtst]
-    # tst_err = compute_error(ytst, y_pred)
-
-    # print('Test Error = {0:4.2f}%.'.format(tst_err * 100))
-
-    # train_error = compute_error(ytrn, y_pred)
-
-    # print('Train Error = {0:4.2f}%.'.format(train_error * 100))
-
-    # Draw Confusion Matrix with scikit
-    # print()
-    # print("Confusion Matrix")
-    # print(confusion_matrix(ytst, y_pred))
+    # --------------------BOOSTING--------------------
+   	# depth 
+    max_depth = [1, 2]
+    # bag size 
+    num_trees = [20, 40]
 
 
-    # Calculating average of training errors and testing errors - MONKS 1 Problem
-    # for i in range(1, 4):
-    #     filename_train = str('./monks-'+str(i)+'.train')
-    #     M = np.genfromtxt(filename_train, missing_values=0, skip_header=0, delimiter=',', dtype=int)
-    #     ytrn = M[:, 0]
-    #     Xtrn = M[:, 1:]
+    # create 4 modals and draw the confusion matrix
+    # for m_depth in max_depth:
+    #     for n_tree in num_trees:
+    #         # calculate the weighted hypothesis of bagging
+    #         h_boosting = boosting(Xtrn, ytrn, m_depth, n_tree)
+    #         # calculate training prediction
+    #         train_prediction = [predict_boost_bag_example(Xtrn[i, :], h_boosting) for i in range(len(ytrn))]
+
+    #         # compute the training error
+    #         training_error = compute_error(ytrn, train_prediction)
 
 
-    #     filename_test = str('./monks-'+str(i)+'.test')
-    #     M = np.genfromtxt(filename_test, missing_values=0, skip_header=0, delimiter=',', dtype=int)
-    #     ytst = M[:, 0]
-    #     Xtst = M[:, 1:]
-    #     monks_test_error = []
-    #     monks_train_error = []
-    #     decision_tree_depths = []
-    #     for j in range(1, 11):
-    #         decision_tree = id3(Xtrn, ytrn, max_depth=j)
-    #         y_pred_test = [predict_example(x, decision_tree) for x in Xtst]
-    #         tst_err = compute_error(ytst, y_pred_test)
+    #         # calculate test predictions
+    #         test_prediction = [predict_boost_bag_example(Xtst[i, :], h_boosting) for i in range(len(ytst))]
 
-    #         y_pred_train = [predict_example(x, decision_tree) for x in Xtrn]
-    #         train_error = compute_error(ytrn, y_pred_train)
-    #         monks_test_error.append(tst_err)
-    #         monks_train_error.append(train_error)
-    #         decision_tree_depths.append(j)
+    #         # compute the test error
+    #         testing_error = compute_error(ytst, test_prediction)
 
-        # fig,ax=plt.subplots()
-        # plt.xlabel('Decision Tree Depth')
-        # plt.ylabel('Errors')
-        # plt.plot(decision_tree_depths,monks_train_error,'g',label='Training Error')
-        # plt.plot(decision_tree_depths, monks_test_error,'p',label='Test Error', linestyle='dashed')
-        # legend = ax.legend(loc='upper right', shadow=True, fontsize='x-large')
-        # plt.savefig('monks__'+ str(i)+ '.png')
-        # plt.show()
-        # print(train_error)
+    #         # print the results
+    #         print("Boosting results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
+    #         print('Training Accuracy={0}, Testing Accuracy={1}'.format((1-training_error)*100, (1-testing_error)*100))
+
+    #         # Print the confusion matrix
+    #         print()
+    #         print("Confusion Matrix for Boosting with max_depth = {} and bag_size={}".format(m_depth, n_tree))
+    #         print(confusion_matrix(ytst, test_prediction))
+
+
+    print("============================ScikitLearn Learning============================")
+    
+    from sklearn.ensemble import AdaBoostClassifier
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn import model_selection
+    from sklearn.ensemble import BaggingClassifier
+
+
+    print("============================ScikitLearn Bagging============================")
+
+    # depth 
+    max_depth = [3, 5]
+    # bag size 
+    num_trees = [10, 20]
+    for m_depth in max_depth:
+        for n_tree in num_trees:
+            tree_classifier = DecisionTreeClassifier(criterion="entropy",max_depth=m_depth)
+            clf = AdaBoostClassifier(base_estimator=tree_classifier, n_estimators=4, learning_rate=1)
+            clf.fit(Xtrn,ytrn)
+            ytest_pred=clf.predict(Xtst)
+            testing_error = compute_error(ytst, ytest_pred)
+
+            print("Boosting results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
+            print('Testing Accuracy={}'.format((1-testing_error)*100))
+
+
+            # Print the confusion matrix
+            print()
+            print("Confusion Matrix for Boosting with max_depth = {} and bag_size={}".format(m_depth, n_tree))
+            print(confusion_matrix(ytst, ytest_pred))
+
+
+    print("============================ScikitLearn Boosting============================")
+
+    # depth 
+    max_depth = [1, 2]
+    # bag size 
+    num_trees = [20, 40]
+    for m_depth in max_depth:
+        for n_tree in num_trees:
+            tree_classifier = DecisionTreeClassifier(criterion="entropy",max_depth=m_depth)
+            clf = BaggingClassifier(base_estimator=tree_classifier, n_estimators=10, random_state=7)
+            clf.fit(Xtrn,ytrn)
+            ytest_pred=clf.predict(Xtst)
+            testing_error = compute_error(ytst, ytest_pred)
+
+            print("Bagging results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
+            print('Testing Accuracy={}'.format((1-testing_error)*100))
+
+
+            # Print the confusion matrix
+            print()
+            print("Confusion Matrix for Boosting with max_depth = {} and bag_size={}".format(m_depth, n_tree))
+            print(confusion_matrix(ytst, ytest_pred))
+            
     
