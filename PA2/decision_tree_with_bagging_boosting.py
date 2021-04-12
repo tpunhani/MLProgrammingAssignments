@@ -400,31 +400,31 @@ if __name__ == '__main__':
 
 
     # create 4 modals and draw the confusion matrix
-    # for m_depth in max_depth:
-    #     for n_tree in num_trees:
-    #         # calculate the weighted hypothesis of bagging
-    #         h_bagging = bagging(Xtrn, ytrn, m_depth, n_tree)
-    #         # calculate training prediction
-    #         train_prediction = [predict_boost_bag_example(Xtrn[i, :], h_bagging) for i in range(len(ytrn))]
+    for m_depth in max_depth:
+        for n_tree in num_trees:
+            # calculate the weighted hypothesis of bagging
+            h_bagging = bagging(Xtrn, ytrn, m_depth, n_tree)
+            # calculate training prediction
+            train_prediction = [predict_boost_bag_example(Xtrn[i, :], h_bagging) for i in range(len(ytrn))]
 
-    #         # compute the training error
-    #         training_error = compute_error(ytrn, train_prediction)
+            # compute the training error
+            training_error = compute_error(ytrn, train_prediction)
 
 
-    #         # calculate test predictions
-    #         test_prediction = [predict_boost_bag_example(Xtst[i, :], h_bagging) for i in range(len(ytst))]
+            # calculate test predictions
+            test_prediction = [predict_boost_bag_example(Xtst[i, :], h_bagging) for i in range(len(ytst))]
 
-    #         # compute the test error
-    #         testing_error = compute_error(ytst, test_prediction)
+            # compute the test error
+            testing_error = compute_error(ytst, test_prediction)
 
-    #         # print the results
-    #         print("Bagging results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
-    #         print('Training Accuracy={0}, Testing Accuracy={1}'.format((1-training_error)*100, (1-testing_error)*100))
+            # print the results
+            print("Bagging results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
+            print('Training Accuracy={0}, Testing Accuracy={1}'.format((1-training_error)*100, (1-testing_error)*100))
 
-    #         # Print the confusion matrix
-    #         print()
-    #         print("Confusion Matrix for Bagging with max_depth = {} and bag_size={}".format(m_depth, n_tree))
-    #         print(confusion_matrix(ytst, test_prediction))
+            # Print the confusion matrix
+            print()
+            print("Confusion Matrix for Bagging with max_depth = {} and bag_size={}".format(m_depth, n_tree))
+            print(confusion_matrix(ytst, test_prediction))
 
 
 
@@ -437,31 +437,31 @@ if __name__ == '__main__':
 
 
     # create 4 modals and draw the confusion matrix
-    # for m_depth in max_depth:
-    #     for n_tree in num_trees:
-    #         # calculate the weighted hypothesis of bagging
-    #         h_boosting = boosting(Xtrn, ytrn, m_depth, n_tree)
-    #         # calculate training prediction
-    #         train_prediction = [predict_boost_bag_example(Xtrn[i, :], h_boosting) for i in range(len(ytrn))]
+    for m_depth in max_depth:
+        for n_tree in num_trees:
+            # calculate the weighted hypothesis of bagging
+            h_boosting = boosting(Xtrn, ytrn, m_depth, n_tree)
+            # calculate training prediction
+            train_prediction = [predict_boost_bag_example(Xtrn[i, :], h_boosting) for i in range(len(ytrn))]
 
-    #         # compute the training error
-    #         training_error = compute_error(ytrn, train_prediction)
+            # compute the training error
+            training_error = compute_error(ytrn, train_prediction)
 
 
-    #         # calculate test predictions
-    #         test_prediction = [predict_boost_bag_example(Xtst[i, :], h_boosting) for i in range(len(ytst))]
+            # calculate test predictions
+            test_prediction = [predict_boost_bag_example(Xtst[i, :], h_boosting) for i in range(len(ytst))]
 
-    #         # compute the test error
-    #         testing_error = compute_error(ytst, test_prediction)
+            # compute the test error
+            testing_error = compute_error(ytst, test_prediction)
 
-    #         # print the results
-    #         print("Boosting results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
-    #         print('Training Accuracy={0}, Testing Accuracy={1}'.format((1-training_error)*100, (1-testing_error)*100))
+            # print the results
+            print("Boosting results for max_depth = {} and bag_size = {}".format(m_depth, n_tree))
+            print('Training Accuracy={0}, Testing Accuracy={1}'.format((1-training_error)*100, (1-testing_error)*100))
 
-    #         # Print the confusion matrix
-    #         print()
-    #         print("Confusion Matrix for Boosting with max_depth = {} and bag_size={}".format(m_depth, n_tree))
-    #         print(confusion_matrix(ytst, test_prediction))
+            # Print the confusion matrix
+            print()
+            print("Confusion Matrix for Boosting with max_depth = {} and bag_size={}".format(m_depth, n_tree))
+            print(confusion_matrix(ytst, test_prediction))
 
 
     print("============================ScikitLearn Learning============================")
