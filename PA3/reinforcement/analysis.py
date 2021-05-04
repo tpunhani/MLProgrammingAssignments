@@ -19,6 +19,12 @@
 # Set the given parameters to obtain the specified policies through
 # value iteration.
 
+
+def question1():
+    discount = 0.9
+    iterations = 100
+    return discount,iterations
+
 def question2():
     answerDiscount = 0.9
     answerNoise = 0.2
@@ -59,6 +65,9 @@ def question3e():
     return answerDiscount, answerNoise, answerLivingReward
     # If not possible, return 'NOT POSSIBLE'
 
+
+
+
 def question6():
     answerEpsilon = None
     answerLearningRate = None
@@ -66,8 +75,8 @@ def question6():
     # If not possible, return 'NOT POSSIBLE'
 
 if __name__ == '__main__':
-    print ('Answers to analysis questions:')
+    print 'Answers to analysis questions:'
     import analysis
     for q in [q for q in dir(analysis) if q.startswith('question')]:
         response = getattr(analysis, q)()
-        print ('  Question %s:\t%s' % (q, str(response)))
+        print '  Question %s:\t%s' % (q, str(response))
