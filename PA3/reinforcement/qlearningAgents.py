@@ -121,10 +121,7 @@ class QLearningAgent(ReinforcementAgent):
 
         # return the random of equal values best actions
         return random.choice(best_possible_actions)
-        
-
-
-        util.raiseNotDefined()
+        # util.raiseNotDefined()
 
     def getAction(self, state):
         """
